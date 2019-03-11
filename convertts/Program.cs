@@ -9,7 +9,6 @@ namespace convertts
 {
     class Program
     {
-        // Test Commit
         public static ConcurrentQueue<string> FilesToProcessQueue = new ConcurrentQueue<string>();
         public static string Prefix2IndicateInProcess = "inproc-";
         public static bool Verbose = true;
@@ -29,9 +28,32 @@ namespace convertts
 
             Console.WriteLine(Environment.NewLine + "Number of files = " + FilesToProcessQueue.Count.ToString() + Environment.NewLine);
 
+            bool DurationLongEnough = true;
+
             while (FilesToProcessQueue.TryDequeue(out string FileToConvert))
             {
                 TryConvert(FileToConvert);
+
+                if (DurationLongEnough && FilesToProcessQueue.Count > 0)
+                {
+                    Console.WriteLine("Press C to cancel; R to re-read file system; G to keep going (will happen automatically in 5 seconds)");
+                    DateTime beginWait = DateTime.Now;
+                    while (!Console.KeyAvailable && DateTime.Now.Subtract(beginWait).TotalSeconds < 5)
+                        Thread.Sleep(250);
+
+                    if (Console.KeyAvailable)
+                    {
+                        string keyPressed = Console.ReadKey().KeyChar.ToString();
+                        Console.WriteLine(Environment.NewLine + "You pressed: {0}", keyPressed);
+
+                        if (keyPressed == "c" || keyPressed == "C")
+                        {
+                            Console.WriteLine("Cancelling all pending conversions ... " + Environment.NewLine);
+                            FilesToProcessQueue.Clear();
+                        }
+                    }
+                }
+
             }
         }
 
@@ -63,17 +85,8 @@ namespace convertts
                     return;
                 }
 
-            //if (Verbose)
-            //{
-            //    Console.WriteLine("Process file '{0}'", path);
-            //    Console.WriteLine("Full FileName '{0}'", FullFileName);
-            //    Console.WriteLine("  Extension =  '{0}'", ext);
-            //    Console.WriteLine("");
-            //}
-
             if (ext == ".ts")
                 FilesToProcessQueue.Enqueue(path);
-
         }
 
         static void TryConvert(string FileToConvert)
@@ -108,6 +121,7 @@ namespace convertts
             }
 
             long lengthOriginalFile = new FileInfo(FileToConvert).Length;
+            DateTime dtMarker = DateTime.Now;
 
             try
             {
@@ -119,17 +133,15 @@ namespace convertts
                 return;
             }
 
-            DateTime dtMarker = DateTime.Now;
-
             // ffmpeg -i input.ts -acodec copy -preset slow output.mp4
-
             StringBuilder sb = new StringBuilder();
             sb.Append(" -i " + "\"" + inProcessFileName + "\"");
             sb.Append(" -acodec copy -preset slow ");
             sb.Append("\"" + outFileName + "\"");
 
+            if (Verbose)
+                Console.WriteLine("Start conversion: " + FileToConvert);
 
-            Console.WriteLine("Start conversion: " + FileToConvert);
             using (Process process = new Process())
             {
                 process.StartInfo.FileName = "ffmpeg.exe";
@@ -142,7 +154,7 @@ namespace convertts
             Thread.Sleep(1000);
             try
             {
-                File.Delete(FileToConvert);
+                File.Delete(inProcessFileName);
             }
             catch
             {
@@ -151,23 +163,29 @@ namespace convertts
 
             string dur = (DateTime.Now - dtMarker).ToString("hh':'mm':'ss");
             long lengthNewFile = new FileInfo(outFileName).Length;
+            LogMessage(outFileName, dur, lengthOriginalFile, lengthNewFile);
 
-            //LogMessage(outFileName, dur, lengthNewFile, lengthOriginalFile);
-
-            Console.WriteLine("End conversion: " + FileToConvert);
+            if (Verbose)
+                Console.WriteLine("End conversion: " + FileToConvert);
         }
 
-        static void LogMessage(string fname, string convertDuration, long newFile, long origFile)
+        static void LogMessage(string fname, string convertDuration, long origFile, long newFile)
         {
             string message = "";
-            message += DateTime.Now.ToString("hh':'mm'");
+            message += DateTime.Now.ToString("hh':'mm':'ss");
             message += "\t" + fname;
             message += "\t" + convertDuration;
-            message += "\t" + newFile.ToString();
             message += "\t" + origFile.ToString();
+            message += "\t" + newFile.ToString();
+
+            if (origFile > 0 && newFile > 0)
+            {
+                message += "\t" + ((newFile *100) / origFile).ToString() + "%";
+            }
+
+            message += Environment.NewLine;
 
             File.AppendAllText(LogFileName, message);
-
         }
 
     }
