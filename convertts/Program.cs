@@ -17,22 +17,23 @@ namespace convertts
 
         static void Main(string[] args)
         {
+            GetFilesToProcess(args);
 
-            FillFilesToProcessQueue(args);
-
-            bool DurationLongEnough = true; // process for how long before rescanning files?
+            if (FilesToProcessQueue.Count < 1)
+                return;
 
             while (FilesToProcessQueue.TryDequeue(out string FileToConvert))
             {
                 TryConvert(FileToConvert);
 
-                if (DurationLongEnough && FilesToProcessQueue.Count > 0)
+                if (FilesToProcessQueue.Count > 0)
                 {
                     Console.WriteLine("Press C to cancel; "
-                        + "R to re-read file system; "
-                        + "G to keep going (will happen automatically in " 
-                            + WaitBetweenConversionsSecs.ToString() 
-                            + " seconds)");
+                                    + "R to re-read file system; "
+                                    + "G to keep going (will happen automatically in " 
+                                    + WaitBetweenConversionsSecs.ToString() 
+                                    + " seconds)");
+
                     DateTime beginWait = DateTime.Now;
                     while (!Console.KeyAvailable && DateTime.Now.Subtract(beginWait).TotalSeconds < WaitBetweenConversionsSecs)
                         Thread.Sleep(250);
@@ -47,15 +48,19 @@ namespace convertts
                             Console.WriteLine("Cancelling all pending conversions ... " + Environment.NewLine);
                             FilesToProcessQueue.Clear();
                         }
+                        else if (keyPressed == "r" || keyPressed == "R")
+                        {
+                            GetFilesToProcess(args);
+                        }
                     }
                 }
-
             }
-        }
+        } // end of Main
 
-        public static void FillFilesToProcessQueue(string[] args)
+        public static void GetFilesToProcess(string[] args)
         {
             Console.WriteLine("Getting list of files to work on ..." + Environment.NewLine);
+            FilesToProcessQueue.Clear();
 
             foreach (string path in args)
             {
@@ -64,9 +69,7 @@ namespace convertts
                 else
                     Console.WriteLine("{0} is not a valid directory.", path);
             }
-
             Console.WriteLine(Environment.NewLine + "Number of files = " + FilesToProcessQueue.Count.ToString() + Environment.NewLine);
-
         }
 
         public static void ProcessDirectory(string targetDirectory)
@@ -141,6 +144,7 @@ namespace convertts
             }
             catch 
             {
+                LogMessage(FileToConvert, "Failed to rename file for state change to inProcess; exception thrown", 0, 0);
                 Console.WriteLine("Failed to move file to inProcess state: " + FileToConvert);
                 return;
             }
@@ -160,6 +164,8 @@ namespace convertts
                 process.StartInfo.Arguments = sb.ToString();
                 process.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
                 process.Start();
+                Thread.Sleep(2000);
+                process.PriorityClass = ProcessPriorityClass.BelowNormal;
                 process.WaitForExit();
             }
 
@@ -170,6 +176,7 @@ namespace convertts
             }
             catch
             {
+                LogMessage(inProcessFileName, "Failed to delete file, exception thrown", 0, 0);
                 Console.WriteLine("Exception trying to delete source file: " + FileToConvert);
             }
 
