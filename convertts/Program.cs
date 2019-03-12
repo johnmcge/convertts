@@ -13,22 +13,14 @@ namespace convertts
         public static string Prefix2IndicateInProcess = "inproc-";
         public static bool Verbose = true;
         public static string LogFileName = "logfile.txt";
+        public static int WaitBetweenConversionsSecs = 10;
 
         static void Main(string[] args)
         {
 
-            Console.WriteLine("Getting list of files to work on ..." + Environment.NewLine);
-            foreach (string path in args)
-            {
-                if (Directory.Exists(path))
-                    ProcessDirectory(path);
-                else
-                    Console.WriteLine("{0} is not a valid directory.", path);
-            }
+            FillFilesToProcessQueue(args);
 
-            Console.WriteLine(Environment.NewLine + "Number of files = " + FilesToProcessQueue.Count.ToString() + Environment.NewLine);
-
-            bool DurationLongEnough = true;
+            bool DurationLongEnough = true; // process for how long before rescanning files?
 
             while (FilesToProcessQueue.TryDequeue(out string FileToConvert))
             {
@@ -36,9 +28,13 @@ namespace convertts
 
                 if (DurationLongEnough && FilesToProcessQueue.Count > 0)
                 {
-                    Console.WriteLine("Press C to cancel; R to re-read file system; G to keep going (will happen automatically in 5 seconds)");
+                    Console.WriteLine("Press C to cancel; "
+                        + "R to re-read file system; "
+                        + "G to keep going (will happen automatically in " 
+                            + WaitBetweenConversionsSecs.ToString() 
+                            + " seconds)");
                     DateTime beginWait = DateTime.Now;
-                    while (!Console.KeyAvailable && DateTime.Now.Subtract(beginWait).TotalSeconds < 5)
+                    while (!Console.KeyAvailable && DateTime.Now.Subtract(beginWait).TotalSeconds < WaitBetweenConversionsSecs)
                         Thread.Sleep(250);
 
                     if (Console.KeyAvailable)
@@ -55,6 +51,22 @@ namespace convertts
                 }
 
             }
+        }
+
+        public static void FillFilesToProcessQueue(string[] args)
+        {
+            Console.WriteLine("Getting list of files to work on ..." + Environment.NewLine);
+
+            foreach (string path in args)
+            {
+                if (Directory.Exists(path))
+                    ProcessDirectory(path);
+                else
+                    Console.WriteLine("{0} is not a valid directory.", path);
+            }
+
+            Console.WriteLine(Environment.NewLine + "Number of files = " + FilesToProcessQueue.Count.ToString() + Environment.NewLine);
+
         }
 
         public static void ProcessDirectory(string targetDirectory)
@@ -190,8 +202,3 @@ namespace convertts
 
     }
 }
-
-/*
- * 
-ffmpeg -ss 00:20:00 -t 59:59:59 -i "Young Sheldon (2017) - S02E01 - A High-Pitched Buzz and Training Wheels - TEST.ts" -acodec copy -vcodec copy "Young Sheldon (2017) - S02E01 - A High-Pitched Buzz and Training Wheels - TESTTRIMMED.ts"
- * */
